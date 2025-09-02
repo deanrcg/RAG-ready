@@ -8,6 +8,7 @@ import tempfile
 import os
 import json
 from pathlib import Path
+from datetime import datetime
 
 # Import our modules with fallbacks
 try:
@@ -30,6 +31,106 @@ try:
 except ImportError:
     EMBEDDING_AVAILABLE = False
     print("⚠️  Embedding utilities not available")
+
+def save_as_jsonl(jsonl_output, filename=None):
+    """Save JSONL output to a file."""
+    if not jsonl_output or jsonl_output.startswith("Error") or jsonl_output.startswith("Please"):
+        return None, "No valid output to save"
+    
+    try:
+        # Create output directory if it doesn't exist
+        output_dir = Path("out")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Generate filename if not provided
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"processed_chunks_{timestamp}.jsonl"
+        
+        # Ensure .jsonl extension
+        if not filename.endswith('.jsonl'):
+            filename += '.jsonl'
+        
+        filepath = output_dir / filename
+        
+        # Write the JSONL content
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(jsonl_output)
+        
+        return str(filepath), f"✅ Saved to {filepath}"
+    
+    except Exception as e:
+        return None, f"❌ Error saving file: {str(e)}"
+
+def save_as_markdown(jsonl_output, filename=None):
+    """Convert JSONL output to Markdown format and save."""
+    if not jsonl_output or jsonl_output.startswith("Error") or jsonl_output.startswith("Please"):
+        return None, "No valid output to save"
+    
+    try:
+        # Parse JSONL content
+        chunks = []
+        for line in jsonl_output.strip().split('\n'):
+            if line.strip():
+                chunks.append(json.loads(line))
+        
+        if not chunks:
+            return None, "No valid chunks to convert"
+        
+        # Create output directory if it doesn't exist
+        output_dir = Path("out")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Generate filename if not provided
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"processed_chunks_{timestamp}.md"
+        
+        # Ensure .md extension
+        if not filename.endswith('.md'):
+            filename += '.md'
+        
+        filepath = output_dir / filename
+        
+        # Convert to Markdown
+        markdown_content = []
+        markdown_content.append(f"# {chunks[0].get('metadata', {}).get('title', 'Processed Document')}")
+        markdown_content.append("")
+        
+        for i, chunk in enumerate(chunks, 1):
+            markdown_content.append(f"## Chunk {i}")
+            markdown_content.append("")
+            markdown_content.append("**Content:**")
+            markdown_content.append(chunk.get('content', ''))
+            markdown_content.append("")
+            
+            # Add metadata
+            metadata = chunk.get('metadata', {})
+            if metadata:
+                markdown_content.append("**Metadata:**")
+                for key, value in metadata.items():
+                    if isinstance(value, list):
+                        markdown_content.append(f"- **{key}:** {', '.join(value)}")
+                    else:
+                        markdown_content.append(f"- **{key}:** {value}")
+                markdown_content.append("")
+            
+            # Add embeddings info if present
+            if 'embedding' in chunk:
+                markdown_content.append("**Embedding:** [Vector data available]")
+                markdown_content.append("")
+            
+            markdown_content.append("---")
+            markdown_content.append("")
+        
+        # Write the Markdown content
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(markdown_content))
+        
+        return str(filepath), f"✅ Saved to {filepath}"
+    
+    except Exception as e:
+        return None, f"❌ Error saving file: {str(e)}"
 
 def process_text(text, section, slug, title, jurisdiction, doc_type, version, eff_date, rev_date, owner, tags, chunk_size, overlap, generate_embeddings, embedding_model):
     """Process text input and return JSONL chunks."""
@@ -201,6 +302,17 @@ def create_demo():
                     )
                     chunk_count = gr.Number(label="Chunks Generated", value=0)
                 
+                # Save buttons for text processing
+                with gr.Row():
+                    save_jsonl_btn = gr.Button("💾 Save as JSONL", variant="secondary")
+                    save_md_btn = gr.Button("📄 Save as Markdown", variant="secondary")
+                
+                save_status = gr.Textbox(
+                    label="Save Status",
+                    placeholder="Save status will appear here...",
+                    interactive=False
+                )
+                
                 process_btn.click(
                     fn=process_text,
                     inputs=[
@@ -209,6 +321,19 @@ def create_demo():
                         generate_embeddings, embedding_model
                     ],
                     outputs=[output_text, chunk_count]
+                )
+                
+                # Save button event handlers
+                save_jsonl_btn.click(
+                    fn=save_as_jsonl,
+                    inputs=[output_text],
+                    outputs=[save_status]
+                )
+                
+                save_md_btn.click(
+                    fn=save_as_markdown,
+                    inputs=[output_text],
+                    outputs=[save_status]
                 )
             
             # File Upload Tab
@@ -273,6 +398,17 @@ def create_demo():
                     )
                     file_chunk_count = gr.Number(label="Chunks Generated", value=0)
                 
+                # Save buttons for file processing
+                with gr.Row():
+                    file_save_jsonl_btn = gr.Button("💾 Save as JSONL", variant="secondary")
+                    file_save_md_btn = gr.Button("📄 Save as Markdown", variant="secondary")
+                
+                file_save_status = gr.Textbox(
+                    label="Save Status",
+                    placeholder="Save status will appear here...",
+                    interactive=False
+                )
+                
                 file_process_btn.click(
                     fn=process_file,
                     inputs=[
@@ -282,6 +418,19 @@ def create_demo():
                         file_generate_embeddings, file_embedding_model
                     ],
                     outputs=[file_output_text, file_chunk_count]
+                )
+                
+                # Save button event handlers for file processing
+                file_save_jsonl_btn.click(
+                    fn=save_as_jsonl,
+                    inputs=[file_output_text],
+                    outputs=[file_save_status]
+                )
+                
+                file_save_md_btn.click(
+                    fn=save_as_markdown,
+                    inputs=[file_output_text],
+                    outputs=[file_save_status]
                 )
             
             # Batch Processing Tab
@@ -320,6 +469,11 @@ def create_demo():
         ### 📊 Output Format
         
         The system generates JSONL files with rich metadata, ready for vector database integration.
+        
+        ### 💾 Save Options
+        
+        - **JSONL**: Save as JSONL format for vector database import
+        - **Markdown**: Save as readable Markdown with metadata
         
         ### 🔧 Advanced Features
         
