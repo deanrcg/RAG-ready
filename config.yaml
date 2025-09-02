@@ -1,0 +1,70 @@
+# RAG Document Processor Configuration
+
+# Default chunking settings
+chunking:
+  default_chunk_size: 280
+  default_overlap: 40
+  min_chunk_size: 150
+  max_chunk_size: 500
+  min_overlap: 0
+  max_overlap: 120
+
+# Embedding settings
+embeddings:
+  default_model: "all-MiniLM-L6-v2"
+  available_models:
+    fast: "all-MiniLM-L6-v2"
+    balanced: "all-mpnet-base-v2"
+    high_quality: "all-MiniLM-L12-v2"
+  batch_size: 32
+  device: "auto"  # "cpu", "cuda", or "auto"
+
+# Document processing
+document_processing:
+  supported_formats:
+    - ".txt"
+    - ".md"
+    - ".pdf"
+    - ".docx"
+    - ".xlsx"
+    - ".xls"
+  text_cleaning:
+    remove_excessive_whitespace: true
+    remove_page_markers: true
+    clean_bullet_points: true
+    remove_empty_lines: true
+
+# Metadata defaults
+metadata:
+  default_jurisdiction: "GB"
+  default_doc_type: "guidance"
+  default_version: "1.0"
+  default_owner: "Document Owner"
+  required_fields:
+    - "title"
+    - "slug"
+  optional_fields:
+    - "jurisdiction"
+    - "doc_type"
+    - "version"
+    - "effective_date"
+    - "review_date"
+    - "owner"
+    - "source_url"
+    - "tags"
+    - "section"
+
+# Output settings
+output:
+  default_format: "jsonl"  # "jsonl" or "csv"
+  include_embeddings: false
+  include_metadata: true
+  output_directory: "out"
+
+# UI settings
+ui:
+  theme: "soft"
+  server_port: 7860
+  server_name: "0.0.0.0"
+  share: false
+  show_error: true
