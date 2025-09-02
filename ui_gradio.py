@@ -38,6 +38,24 @@ def save_as_jsonl(jsonl_output, filename=None):
         return None, "No valid output to save"
     
     try:
+        # Validate that we have valid JSONL content
+        lines = jsonl_output.strip().split('\n')
+        valid_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if line:
+                try:
+                    # Try to parse as JSON to validate
+                    json.loads(line)
+                    valid_lines.append(line)
+                except json.JSONDecodeError:
+                    print(f"Warning: Skipping invalid JSON line: {line[:100]}...")
+                    continue
+        
+        if not valid_lines:
+            return None, f"No valid JSONL content found. Found {len(lines)} lines but none were valid JSON."
+        
         # Create output directory if it doesn't exist
         output_dir = Path("out")
         output_dir.mkdir(exist_ok=True)
@@ -55,9 +73,9 @@ def save_as_jsonl(jsonl_output, filename=None):
         
         # Write the JSONL content
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(jsonl_output)
+            f.write('\n'.join(valid_lines))
         
-        return str(filepath), f"✅ Saved to {filepath}"
+        return str(filepath), f"✅ Saved {len(valid_lines)} chunks to {filepath}"
     
     except Exception as e:
         return None, f"❌ Error saving file: {str(e)}"
@@ -70,12 +88,21 @@ def save_as_markdown(jsonl_output, filename=None):
     try:
         # Parse JSONL content
         chunks = []
-        for line in jsonl_output.strip().split('\n'):
-            if line.strip():
-                chunks.append(json.loads(line))
+        lines = jsonl_output.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line:
+                try:
+                    chunk = json.loads(line)
+                    chunks.append(chunk)
+                except json.JSONDecodeError as e:
+                    # If it's not valid JSON, it might be a single chunk or error message
+                    print(f"Warning: Could not parse line as JSON: {line[:100]}...")
+                    continue
         
         if not chunks:
-            return None, "No valid chunks to convert"
+            return None, f"No valid chunks to convert. Found {len(lines)} lines but couldn't parse any as JSON."
         
         # Create output directory if it doesn't exist
         output_dir = Path("out")
@@ -94,15 +121,29 @@ def save_as_markdown(jsonl_output, filename=None):
         
         # Convert to Markdown
         markdown_content = []
-        markdown_content.append(f"# {chunks[0].get('metadata', {}).get('title', 'Processed Document')}")
+        
+        # Get title from first chunk or use default
+        title = "Processed Document"
+        if chunks and 'metadata' in chunks[0]:
+            title = chunks[0]['metadata'].get('title', title)
+        
+        markdown_content.append(f"# {title}")
+        markdown_content.append("")
+        markdown_content.append(f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+        markdown_content.append(f"*Total chunks: {len(chunks)}*")
         markdown_content.append("")
         
         for i, chunk in enumerate(chunks, 1):
             markdown_content.append(f"## Chunk {i}")
             markdown_content.append("")
-            markdown_content.append("**Content:**")
-            markdown_content.append(chunk.get('content', ''))
-            markdown_content.append("")
+            
+            # Add content (check both 'text' and 'content' fields)
+            content = chunk.get('text', chunk.get('content', ''))
+            if content:
+                markdown_content.append("**Content:**")
+                markdown_content.append("")
+                markdown_content.append(content)
+                markdown_content.append("")
             
             # Add metadata
             metadata = chunk.get('metadata', {})
@@ -110,14 +151,23 @@ def save_as_markdown(jsonl_output, filename=None):
                 markdown_content.append("**Metadata:**")
                 for key, value in metadata.items():
                     if isinstance(value, list):
-                        markdown_content.append(f"- **{key}:** {', '.join(value)}")
+                        markdown_content.append(f"- **{key}:** {', '.join(str(v) for v in value)}")
                     else:
                         markdown_content.append(f"- **{key}:** {value}")
                 markdown_content.append("")
             
             # Add embeddings info if present
             if 'embedding' in chunk:
-                markdown_content.append("**Embedding:** [Vector data available]")
+                embedding = chunk['embedding']
+                if isinstance(embedding, list) and len(embedding) > 0:
+                    markdown_content.append(f"**Embedding:** Vector with {len(embedding)} dimensions")
+                else:
+                    markdown_content.append("**Embedding:** [Vector data available]")
+                markdown_content.append("")
+            
+            # Add chunk info
+            if 'id' in chunk:
+                markdown_content.append(f"**Chunk ID:** {chunk['id']}")
                 markdown_content.append("")
             
             markdown_content.append("---")
@@ -127,7 +177,7 @@ def save_as_markdown(jsonl_output, filename=None):
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write('\n'.join(markdown_content))
         
-        return str(filepath), f"✅ Saved to {filepath}"
+        return str(filepath), f"✅ Saved {len(chunks)} chunks to {filepath}"
     
     except Exception as e:
         return None, f"❌ Error saving file: {str(e)}"
